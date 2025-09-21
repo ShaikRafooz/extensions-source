@@ -1,0 +1,68 @@
+package eu.kanade.tachiyomi.extension.en.mangakatana
+
+import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.model.*
+import okhttp3.Request
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+
+class MangaKatana : Madara(
+    "MangaKatana",
+    "https://mangakatana.com",
+    "en"
+) {
+    override val useNewChapterEndpoint = true
+    override val chapterUrlSuffix = ""
+
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$baseUrl/page/$page", headers)
+
+    override fun popularMangaSelector(): String = "article .post-title a"
+
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
+            title = element.text()
+            setUrlWithoutDomain(element.attr("href"))
+            thumbnail_url = element.parents().select("img.thumb").attr("src")
+        }
+
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET("$baseUrl/page/$page?sort=date", headers)
+
+    override fun latestUpdatesSelector(): String = popularMangaSelector()
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
+        GET("$baseUrl/page/$page?keyword=$query", headers)
+
+    override fun searchMangaSelector(): String = popularMangaSelector()
+
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            title = document.selectFirst("h1")?.text().orEmpty()
+            author = document.select(".author a").joinToString { it.text() }
+            genre = document.select(".genres a").joinToString { it.text() }
+            description = document.select(".description").text()
+            status = parseStatus(document.selectFirst(".status")?.text())
+            thumbnail_url = document.selectFirst(".cover img")?.absUrl("src")
+        }
+
+    override fun chapterListSelector() = "select#chapter option, .chapter-list a"
+
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
+            name = element.text()
+            setUrlWithoutDomain(element.attr("value").ifBlank { element.attr("href") })
+        }
+
+    override fun pageListParse(document: Document): List<Page> =
+        document.select(".reading-content img").mapIndexed { index, img ->
+            Page(index, "", img.absUrl("data-src").ifBlank { img.absUrl("src") })
+        }
+
+    private fun parseStatus(text: String?): Int =
+        when (text?.lowercase()) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+}
