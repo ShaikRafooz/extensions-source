@@ -1,0 +1,2 @@
+include(":en:mangakatana-rfz")
+project(":en:mangakatana-rfz").projectDir = file("./src/en/mangakatana-rfz")
